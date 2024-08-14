@@ -386,9 +386,8 @@ async def create_user(user: SubUser, current_user: User = Depends(get_current_us
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
 
-
 @app.put("/update_user")
-async def update_user(user: str, updated_user: SubUser, current_user: User = Depends(get_current_user)):
+async def update_user(user: str, updated_user: SubUser,current_user: User = Depends(get_current_user) ):
     try:
         existing_data = usertable.find_one({"name": user})
         if not existing_data:
@@ -400,12 +399,12 @@ async def update_user(user: str, updated_user: SubUser, current_user: User = Dep
     except Exception as e:
 
         return HTTPException(status_code=500, detail=f"The Error is: {e}")
-
-
+    
+    
 @app.delete("/delete_user")
-async def delete_task(user: str, current_user: User = Depends(get_current_user)):
+async def delete_task(user: str,current_user: User = Depends(get_current_user)):
     try:
-
+        
         existing_data = usertable.find_one({"name": user})
         if not existing_data:
             return HTTPException(status_code=404, detail=f"User does not exist")
@@ -413,4 +412,4 @@ async def delete_task(user: str, current_user: User = Depends(get_current_user))
         return {"Status code": 200, "message": "User delete succesfully"}
     except Exception as e:
 
-        return HTTPException(status_code=500, detail=f"The Error is: {e}")
+        return HTTPException(status_code=500, detail=f"The Error is: {e}")    
