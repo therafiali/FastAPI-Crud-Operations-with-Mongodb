@@ -215,7 +215,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
-
+from database.models import SubUser
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -223,6 +223,7 @@ from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from configrations import usertable
+from database.schemas import all_users
 
 # to get a string like this run:
 # openssl rand -hex 32
@@ -335,7 +336,8 @@ async def get_current_active_user(
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    user = authenticate_user(
+        fake_users_db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -362,12 +364,53 @@ async def read_own_items(
 ):
     return [{"item_id": "Foo", "owner": current_user.username}]
 
+
+@app.get("/users")
+async def get_all_users(current_user: Annotated[User, Depends(get_current_active_user)],):
+    data = usertable.find()
+    return all_users(data)
+
+
 @app.post("/create_user/")
-async def create_user(user: User, current_user: User = Depends(get_current_user)):
-    if current_user.username == "ali":
+async def create_user(user: SubUser, current_user: User = Depends(get_current_user)):
+    if current_user.username == "johndoe":
         # Create the user in the database
+        existing_user = usertable.find_one({"name": user.name})
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
         response = usertable.insert_one(dict(user))
-        
-        return {"status": "success", "user_id": "yes"}
+
+        return {"status": "success", "user_id": str(response.inserted_id)}
     else:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+
+
+@app.put("/update_user")
+async def update_user(user: str, updated_user: SubUser, current_user: User = Depends(get_current_user)):
+    try:
+        existing_data = usertable.find_one({"name": user})
+        if not existing_data:
+            return HTTPException(status_code=404, detail=f"User does not exist")
+        updated_user.updated_at = datetime.timestamp(datetime.now())
+        response = usertable.update_one(
+            {"name": user}, {"$set": dict(updated_user)})
+        return {"Status code": 200, "message": "task update succesfully"}
+    except Exception as e:
+
+        return HTTPException(status_code=500, detail=f"The Error is: {e}")
+
+
+@app.delete("/delete_user")
+async def delete_task(user: str, current_user: User = Depends(get_current_user)):
+    try:
+
+        existing_data = usertable.find_one({"name": user})
+        if not existing_data:
+            return HTTPException(status_code=404, detail=f"User does not exist")
+        response = usertable.delete_one({"name": user})
+        return {"Status code": 200, "message": "User delete succesfully"}
+    except Exception as e:
+
+        return HTTPException(status_code=500, detail=f"The Error is: {e}")

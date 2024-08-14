@@ -15,8 +15,8 @@ def individual_user(user):
     return{
         "id" : str(user["_id"]),
         "name" : user["name"],
-        "description" : user["description"],
         "password" : user["password"],
+        "role" : user["role"],
         
     }
     
