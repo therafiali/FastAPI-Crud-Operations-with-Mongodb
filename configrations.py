@@ -8,3 +8,4 @@ MONGO_HOST = "mongodb://localhost"
 client = MongoClient(MONGO_HOST, MONGO_PORT)
 db = client[MONGO_DB]
 collection = db["todo_data"]
+usertable = db["user_data"]

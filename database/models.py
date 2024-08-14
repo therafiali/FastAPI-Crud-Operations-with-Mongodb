@@ -9,3 +9,10 @@ class Todo(BaseModel):
     is_deleted : bool = False
     updated_at : int = int(datetime.timestamp(datetime.now()))
     creation : int = int(datetime.timestamp(datetime.now()))
+    
+class User(BaseModel):
+    name : str
+    description : str
+    password : str
+    updated_at : int = int(datetime.timestamp(datetime.now()))
+    creation : int = int(datetime.timestamp(datetime.now()))

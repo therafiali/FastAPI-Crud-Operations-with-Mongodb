@@ -1,18 +1,10 @@
 from fastapi import FastAPI, APIRouter, HTTPException
-from database.schemas import all_tasks
-from database.models import Todo
-from configrations import collection
+from database.schemas import all_tasks, all_users
+from database.models import Todo, User
+from configrations import collection, usertable
 from bson.objectid import ObjectId
 from datetime import datetime
 
-# MONGO_PORT = 27017
-# MONGO_DB = "mydatabase"
-# MONGO_HOST = "mongodb://localhost"
-
-# # Create a MongoDB client
-# client = MongoClient(MONGO_HOST, MONGO_PORT)
-# db = client[MONGO_DB]
-# collection = db["todo_data"]
 
 app = FastAPI()
 router = APIRouter()
@@ -59,6 +51,22 @@ async def delete_task(task_id: str):
             return HTTPException(status_code=404, detail=f"Task does not exist")
         response = collection.delete_one({"_id": id})
         return {"Status code": 200, "message": "task delete succesfully"}
+    except Exception as e:
+
+        return HTTPException(status_code=500, detail=f"The Error is: {e}")
+
+
+@router.get("/users")
+async def get_all_users():
+    data = usertable.find()
+    return all_users(data)
+
+
+@router.post("/create_user")
+async def create_user(new_task: User):
+    try:
+        response = usertable.insert_one(dict(new_task))
+        return {"Status code": 200, "id": str(response.inserted_id)}
     except Exception as e:
 
         return HTTPException(status_code=500, detail=f"The Error is: {e}")
