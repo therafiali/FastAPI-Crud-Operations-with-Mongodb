@@ -39,10 +39,10 @@ deactivate nondestructive
 if [ "${OSTYPE:-}" = "cygwin" ] || [ "${OSTYPE:-}" = "msys" ] ; then
     # transform D:\path\to\venv to /d/path/to/venv on MSYS
     # and to /cygdrive/d/path/to/venv on Cygwin
-    export VIRTUAL_ENV=$(cygpath "d:\D Drive Data\Github Projects\FastAPI-Crud-Operations-with-Mongodb\.venv")
+    export VIRTUAL_ENV=$(cygpath "d:\Rafi\FastAPI-Crud-Operations-with-Mongodb\.venv")
 else
     # use the path as-is
-    export VIRTUAL_ENV="d:\D Drive Data\Github Projects\FastAPI-Crud-Operations-with-Mongodb\.venv"
+    export VIRTUAL_ENV="d:\Rafi\FastAPI-Crud-Operations-with-Mongodb\.venv"
 fi
 
 _OLD_VIRTUAL_PATH="$PATH"

@@ -224,6 +224,8 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from configrations import usertable
 from database.schemas import all_users
+from bson import ObjectId
+
 
 # to get a string like this run:
 # openssl rand -hex 32
@@ -232,15 +234,16 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
-fake_users_db = {
-    "johndoe": {
-        "username": "johndoe",
-        "full_name": "John Doe",
-        "email": "johndoe@example.com",
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
-        "disabled": False,
-    }
-}
+# fake_users_db = {
+#     "johndoe": {
+#         "username": "johndoe",
+#         "full_name": "John Doe",
+#         "email": "johndoe@example.com",
+#         "hashed_password": "$2b$12$kHjF0nYpJOblY7kqU52cF.UjyqPFlULXWD3InZWTb2sAUN6Gqbgxq",
+#         "disabled": False,
+#     }
+# }
+
 
 
 class Token(BaseModel):
@@ -278,17 +281,25 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user(db, username: str):
-    if username in db:
-        user_dict = db[username]
-        return UserInDB(**user_dict)
+# def get_user(db, username: str):
+#     user
+    # if username in db:
+    #     user_dict = db[username]
+    #     return UserInDB(**user_dict)
+
+def get_user(username: str):
+    user = usertable.find_one({"name":username}) 
+    if not user:
+        return None
+    return user
 
 
-def authenticate_user(fake_db, username: str, password: str):
-    user = get_user(fake_db, username)
+def authenticate_user(username: str, password: str):
+    # user = get_user(usertable, username)
+    user = usertable.find_one({"name":username}) 
     if not user:
         return False
-    if not verify_password(password, user.hashed_password):
+    if not verify_password(password, user.get("password")):
         return False
     return user
 
@@ -318,7 +329,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = TokenData(username=username)
     except InvalidTokenError:
         raise credentials_exception
-    user = get_user(fake_users_db, username=token_data.username)
+    user = get_user(username=token_data.username)
     if user is None:
         raise credentials_exception
     return user
@@ -327,8 +338,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 async def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
+    # if current_user.disabled:
+    #     raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
 
@@ -336,9 +347,8 @@ async def get_current_active_user(
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    user = authenticate_user(
-        fake_users_db, form_data.username, form_data.password)
-    if not user:
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:    
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -346,12 +356,12 @@ async def login_for_access_token(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.get("name")}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/users/me/", response_model=User)
+@app.get("/users/me/", response_model=SubUser)
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_active_user)],
 ):
@@ -360,56 +370,160 @@ async def read_users_me(
 
 @app.get("/users/me/items/")
 async def read_own_items(
-    current_user: Annotated[User, Depends(get_current_active_user)],
+    current_user: Annotated[SubUser, Depends(get_current_active_user)],
 ):
-    return [{"item_id": "Foo", "owner": current_user.username}]
+    return [{"item_id": "Foo", "owner": current_user.get("name")}]
 
 
 @app.get("/users")
-async def get_all_users(current_user: Annotated[User, Depends(get_current_active_user)],):
-    data = usertable.find()
-    return all_users(data)
+async def get_all_users(page: int = 1, limit: int = 10, current_user: SubUser = Depends(get_current_user)):
+    if current_user.get("role") == "admin":    
+        data = usertable
+        total_count = data.count_documents({})
+        total_pages = (total_count + limit - 1) // limit
+        all_data = list(data.find({}).sort(
+            "_id", -1).skip((page - 1) * limit).limit(limit))
+        data_list = []
+        for data in all_data:
+            data_list.append({
+                "name": data.get('name'),
+                "role": data.get('role'),
+                "password": data.get('password'),
+            })
+        return {
+            "data": data_list,
+            "total_pages": total_pages
+        }   
 
 
 @app.post("/create_user/")
-async def create_user(user: SubUser, current_user: User = Depends(get_current_user)):
-    if current_user.username == "johndoe":
+async def create_user(user: SubUser, current_user: SubUser = Depends(get_current_user)):
+    if current_user.get("role") == "admin":
         # Create the user in the database
         existing_user = usertable.find_one({"name": user.name})
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
-        response = usertable.insert_one(dict(user))
+        hashed_password = get_password_hash(user.password)
+        user_data = {
+            "name": user.name,
+            "password": hashed_password,  # Use hashed password here
+            "role": user.role
+        }
+        print(user_data)
+        response = usertable.insert_one(user_data)
 
         return {"status": "success", "user_id": str(response.inserted_id)}
     else:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
 
+# @app.put("/update_user")
+# async def update_user(user: str, updated_user: SubUser,current_user: User = Depends(get_current_user) ):
+#     try:
+#         existing_data = usertable.find_one({"name": user})
+#         if not existing_data:
+#             return HTTPException(status_code=404, detail=f"User does not exist")
+#         updated_user.updated_at = datetime.timestamp(datetime.now())
+#         response = usertable.update_one(
+#             {"name": user}, {"$set": dict(updated_user)})
+#         return {"Status code": 200, "message": "task update succesfully"}
+#     except Exception as e:
+
+#         return HTTPException(status_code=500, detail=f"The Error is: {e}")
+
+
+
 @app.put("/update_user")
-async def update_user(user: str, updated_user: SubUser,current_user: User = Depends(get_current_user) ):
+async def update_user(id: str, updated_user: SubUser,current_user: SubUser = Depends(get_current_user)):
     try:
-        existing_data = usertable.find_one({"name": user})
-        if not existing_data:
-            return HTTPException(status_code=404, detail=f"User does not exist")
-        updated_user.updated_at = datetime.timestamp(datetime.now())
-        response = usertable.update_one(
-            {"name": user}, {"$set": dict(updated_user)})
-        return {"Status code": 200, "message": "task update succesfully"}
-    except Exception as e:
+        # Convert the id from string to ObjectId if necessary
+        if current_user.get("role") == "admin":
+            try:
+                object_id = ObjectId(id)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid user ID format")
 
-        return HTTPException(status_code=500, detail=f"The Error is: {e}")
+            # Retrieve the existing user data
+            existing_data = usertable.find_one({"_id": object_id})
+            if not existing_data:
+                raise HTTPException(status_code=404, detail="User does not exist")
+
+            # Prepare the update data
+            update_data = {}
+
+            # Check if the password field is updated and hash it if so
+            if updated_user.password:
+                hashed_password = get_password_hash(updated_user.password)
+                update_data['password'] = hashed_password
+            else:
+                # If password is not updated, keep the existing one
+                update_data['password'] = existing_data.get('password', '')
+
+            # Update other fields
+            if updated_user.role is not None:
+                update_data['role'] = updated_user.role
+
+            # Update the timestamp
+            update_data['updated_at'] = datetime.timestamp(datetime.now())
+
+            # Perform the update operation
+            response = usertable.update_one(
+                {"_id": object_id},
+                {"$set": update_data}
+            )
+
+            if response.matched_count == 0:
+                raise HTTPException(status_code=404, detail="User does not exist")
+
+            return {"Status code": 200, "message": "User updated successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"The Error is: {e}")
+
     
     
-@app.delete("/delete_user")
-async def delete_task(user: str,current_user: User = Depends(get_current_user)):
-    try:
+# @app.delete("/delete_user")
+# async def delete_task(user: str):
+#     try:
         
-        existing_data = usertable.find_one({"name": user})
-        if not existing_data:
-            return HTTPException(status_code=404, detail=f"User does not exist")
-        response = usertable.delete_one({"name": user})
-        return {"Status code": 200, "message": "User delete succesfully"}
-    except Exception as e:
+#         existing_data = usertable.find_one({"name": user})
+#         if not existing_data:
+#             return HTTPException(status_code=404, detail=f"User does not exist")
+#         response = usertable.delete_one({"name": user})
+#         return {"Status code": 200, "message": "User delete succesfully"}
+#     except Exception as e:
 
-        return HTTPException(status_code=500, detail=f"The Error is: {e}")    
+#         return HTTPException(status_code=500, detail=f"The Error is: {e}")    
+
+@app.delete("/delete_user/{id}")
+async def delete_user(id: str,current_user: SubUser = Depends(get_current_user)):
+    try:
+        # Convert the id from string to ObjectId if necessary
+        if current_user.get("role") == "admin":
+            try:
+                object_id = ObjectId(id)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+            # Retrieve the existing user data
+            existing_data = usertable.find_one({"_id": object_id})
+            if not existing_data:
+                raise HTTPException(status_code=404, detail="User does not exist")
+
+            # Perform the delete operation
+            response = usertable.delete_one({"_id": object_id})
+
+            if response.deleted_count == 0:
+                raise HTTPException(status_code=404, detail="User does not exist")
+
+            return {"Status code": 200, "message": "User deleted successfully"}
+        
+    except Exception as e:
+            raise HTTPException(status_code=500, detail=f"The Error is: {e}")
+    
+
+# @app.get("/get_password_hash")
+# def get_password_hash(password):
+#     return pwd_context.hash(password)
+    

@@ -10,19 +10,18 @@ from datetime import datetime
 #     updated_at : int = int(datetime.timestamp(datetime.now()))
 #     creation : int = int(datetime.timestamp(datetime.now()))
     
-class User(BaseModel):
-    name : str
-    description : str
-    password : str
-    updated_at : int = int(datetime.timestamp(datetime.now()))
-    creation : int = int(datetime.timestamp(datetime.now()))
+# class User(BaseModel):
+#     name : str
+#     description : str
+#     password : str
+#     updated_at : int = int(datetime.timestamp(datetime.now()))
+#     creation : int = int(datetime.timestamp(datetime.now()))
     
 class SubUser(BaseModel):
     name : str
     password : str
     role : str = "user"
-    updated_at : int = int(datetime.timestamp(datetime.now()))
-    creation : int = int(datetime.timestamp(datetime.now()))
+
     
     
 # from pydantic import BaseModel
