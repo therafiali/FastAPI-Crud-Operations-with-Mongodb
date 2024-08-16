@@ -17,7 +17,7 @@ from datetime import datetime
 #     updated_at : int = int(datetime.timestamp(datetime.now()))
 #     creation : int = int(datetime.timestamp(datetime.now()))
     
-class SubUser(BaseModel):
+class User(BaseModel):
     name : str
     password : str
     role : str = "user"

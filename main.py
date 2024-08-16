@@ -215,7 +215,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
-from database.models import SubUser
+from database.models import User
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -225,7 +225,7 @@ from pydantic import BaseModel
 from configrations import usertable
 from database.schemas import all_users
 from bson import ObjectId
-
+from fastapi.middleware.cors import CORSMiddleware
 
 # to get a string like this run:
 # openssl rand -hex 32
@@ -255,11 +255,11 @@ class TokenData(BaseModel):
     username: str | None = None
 
 
-class User(BaseModel):
-    username: str
-    email: str | None = None
-    full_name: str | None = None
-    disabled: bool | None = None
+# class User(BaseModel):
+#     username: str
+#     email: str | None = None
+#     full_name: str | None = None
+#     disabled: bool | None = None
 
 
 class UserInDB(User):
@@ -271,6 +271,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 app = FastAPI()
+
+origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "*"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def verify_password(plain_password, hashed_password):
@@ -361,7 +377,7 @@ async def login_for_access_token(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@app.get("/users/me/", response_model=SubUser)
+@app.get("/users/me/", response_model=User)
 async def read_users_me(
     current_user: Annotated[User, Depends(get_current_active_user)],
 ):
@@ -370,13 +386,13 @@ async def read_users_me(
 
 @app.get("/users/me/items/")
 async def read_own_items(
-    current_user: Annotated[SubUser, Depends(get_current_active_user)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ):
     return [{"item_id": "Foo", "owner": current_user.get("name")}]
 
 
 @app.get("/users")
-async def get_all_users(page: int = 1, limit: int = 10, current_user: SubUser = Depends(get_current_user)):
+async def get_all_users(page: int = 1, limit: int = 10, current_user: User = Depends(get_current_user)):
     if current_user.get("role") == "admin":    
         data = usertable
         total_count = data.count_documents({})
@@ -397,7 +413,7 @@ async def get_all_users(page: int = 1, limit: int = 10, current_user: SubUser = 
 
 
 @app.post("/create_user/")
-async def create_user(user: SubUser, current_user: SubUser = Depends(get_current_user)):
+async def create_user(user: User, current_user: User = Depends(get_current_user)):
     if current_user.get("role") == "admin":
         # Create the user in the database
         existing_user = usertable.find_one({"name": user.name})
@@ -419,7 +435,7 @@ async def create_user(user: SubUser, current_user: SubUser = Depends(get_current
             status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
 
 # @app.put("/update_user")
-# async def update_user(user: str, updated_user: SubUser,current_user: User = Depends(get_current_user) ):
+# async def update_user(user: str, updated_user: User,current_user: User = Depends(get_current_user) ):
 #     try:
 #         existing_data = usertable.find_one({"name": user})
 #         if not existing_data:
@@ -435,7 +451,7 @@ async def create_user(user: SubUser, current_user: SubUser = Depends(get_current
 
 
 @app.put("/update_user")
-async def update_user(id: str, updated_user: SubUser,current_user: SubUser = Depends(get_current_user)):
+async def update_user(id: str, updated_user: User,current_user: User = Depends(get_current_user)):
     try:
         # Convert the id from string to ObjectId if necessary
         if current_user.get("role") == "admin":
@@ -497,7 +513,7 @@ async def update_user(id: str, updated_user: SubUser,current_user: SubUser = Dep
 #         return HTTPException(status_code=500, detail=f"The Error is: {e}")    
 
 @app.delete("/delete_user/{id}")
-async def delete_user(id: str,current_user: SubUser = Depends(get_current_user)):
+async def delete_user(id: str,current_user: User = Depends(get_current_user)):
     try:
         # Convert the id from string to ObjectId if necessary
         if current_user.get("role") == "admin":
