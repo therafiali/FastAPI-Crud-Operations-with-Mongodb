@@ -542,6 +542,7 @@ async def delete_user(id: str,current_user: User = Depends(get_current_user)):
     except Exception as e:
             raise HTTPException(status_code=500, detail=f"The Error is: {e}")
     
+    
 
 # @app.get("/get_password_hash")
 # def get_password_hash(password):
