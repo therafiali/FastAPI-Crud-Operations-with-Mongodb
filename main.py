@@ -402,6 +402,7 @@ async def get_all_users(page: int = 1, limit: int = 10, current_user: User = Dep
         data_list = []
         for data in all_data:
             data_list.append({
+                "_id": str(data["_id"]),
                 "name": data.get('name'),
                 "role": data.get('role'),
                 "password": data.get('password'),
@@ -448,10 +449,8 @@ async def create_user(user: User, current_user: User = Depends(get_current_user)
 
 #         return HTTPException(status_code=500, detail=f"The Error is: {e}")
 
-
-
 @app.put("/update_user")
-async def update_user(id: str, updated_user: User,current_user: User = Depends(get_current_user)):
+async def update_user(id: str, updated_user: User, current_user: User = Depends(get_current_user)):
     try:
         # Convert the id from string to ObjectId if necessary
         if current_user.get("role") == "admin":
@@ -476,7 +475,11 @@ async def update_user(id: str, updated_user: User,current_user: User = Depends(g
                 # If password is not updated, keep the existing one
                 update_data['password'] = existing_data.get('password', '')
 
-            # Update other fields
+            # Check if the name field is updated
+            if updated_user.name:
+                update_data['name'] = updated_user.name
+
+            # Check if the role field is updated
             if updated_user.role is not None:
                 update_data['role'] = updated_user.role
 
@@ -493,9 +496,10 @@ async def update_user(id: str, updated_user: User,current_user: User = Depends(g
                 raise HTTPException(status_code=404, detail="User does not exist")
 
             return {"Status code": 200, "message": "User updated successfully"}
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"The Error is: {e}")
+
 
     
     
@@ -512,7 +516,7 @@ async def update_user(id: str, updated_user: User,current_user: User = Depends(g
 
 #         return HTTPException(status_code=500, detail=f"The Error is: {e}")    
 
-@app.delete("/delete_user/{id}")
+@app.delete("/delete_user")
 async def delete_user(id: str,current_user: User = Depends(get_current_user)):
     try:
         # Convert the id from string to ObjectId if necessary
