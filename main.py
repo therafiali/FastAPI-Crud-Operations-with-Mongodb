@@ -212,6 +212,7 @@
 
 
 # app.include_router(router)
+from pymongo import MongoClient
 
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -222,7 +223,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 from pydantic import BaseModel
-from configrations import usertable
+from configrations import usertable, database
 from database.schemas import all_users
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
@@ -526,7 +527,7 @@ async def delete_user(id: str,current_user: User = Depends(get_current_user)):
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid user ID format")
 
-            # Retrieve the existing user data
+            # Retrieve the existing userdb data
             existing_data = usertable.find_one({"_id": object_id})
             if not existing_data:
                 raise HTTPException(status_code=404, detail="User does not exist")
@@ -543,8 +544,62 @@ async def delete_user(id: str,current_user: User = Depends(get_current_user)):
             raise HTTPException(status_code=500, detail=f"The Error is: {e}")
     
     
+# client = MongoClient("mongodb://localhost:27017")
+# db = client["mydatabase"]
+# collection = db["yellowpages"]
+
+# @app.get("/get_data")
+# async def read_item():
+#     try:
+#         # Convert the string ID to ObjectId
+#         item_id = ObjectId("6679224d8b25b50694e2c9a8")
+#         item = collection.find_one({"_id": item_id})
+#         if item is None:
+#             raise HTTPException(status_code=404, detail="Item not found")
+#         return item
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # @app.get("/get_password_hash")
 # def get_password_hash(password):
 #     return pwd_context.hash(password)
+
+@app.get("/scraper/yellowpages/paginate")
+def get_yellowpages_paginate( page: int = 1, limit: int = 10):
+    collection = database
+    total_count = collection.count_documents({})
+    total_pages = (total_count + limit - 1) // limit
+    all_data = list(collection.find({}).sort(
+        "_id", -1).skip((page - 1) * limit).limit(limit))
+    data_list = []
+    for data in all_data:
+        data_list.append({
+            "id": str(data.get('_id')),
+            "name": str(data.get('Name', '')),
+            "address": str(data.get('Address', '')),
+            "phone": str(data.get('Phone', '')),
+            "link": str(data.get('Link', '')),
+            #
+            "email": str(data.get('email', '')),
+            "regular_hours": str(data.get('regular_hours', '')),
+            "claimed": str(data.get('claimed', '')),
+            "general_info": str(data.get('general_info', '')),
+            "services_products": str(data.get('services_products', '')),
+            "neighborhoods": str(data.get('neighborhoods', '')),
+            "amenities": str(data.get('amenities', '')),
+            "languages": str(data.get('languages', '')),
+            "aka": str(data.get('aka', '')),
+            "social_links": str(data.get('social_links', '')),
+            "categories": str(data.get('categories', '')),
+            "other_info": str(data.get('other_info', '')),
+            "other_links": str(data.get('other_links', '')),
+            #
+            "status": str(data.get('status', '')),
+        })
+    return {
+        "data": data_list,
+        "total_pages": total_pages
+    }
+
+
     
